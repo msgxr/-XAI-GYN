@@ -1,0 +1,35 @@
+# XAI-GYN: Gerekli Python Kütüphaneleri
+# Kurulum: pip install -r requirements.txt
+
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# XAI (Explainable AI)
+grad-cam>=1.4.8
+lime>=0.2.0.1
+shap>=0.44.0
+
+# Web Framework
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Görüntü İşleme
+Pillow>=10.0.0
+opencv-python>=4.8.0
+albumentations>=1.3.0
+
+# Veri & Sayısal İşlemler
+numpy>=1.24.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Görselleştirme
+matplotlib>=3.7.0
+
+# Yardımcı
+tqdm>=4.65.0
+pandas>=2.0.0
+
+# Test
+pytest>=7.4.0

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XAI-GYN | Akıllı Jinekolojik Görüntü Analizi</title>
+  <meta name="description" content="Açıklanabilir Yapay Zeka ile Kadın Hastalıklarında Klinik Karar Destek Sistemi" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<!-- ══════════════════ NAVBAR ══════════════════ -->
+<nav class="navbar" id="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="19" stroke="url(#grad1)" stroke-width="2"/>
+          <path d="M12 20 C12 14 16 10 20 10 C24 10 28 14 28 20 C28 26 24 30 20 30" stroke="#00d4aa" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="20" cy="20" r="4" fill="url(#grad2)"/>
+          <path d="M20 6 L20 10 M20 30 L20 34 M6 20 L10 20 M30 20 L34 20" stroke="#4facfe" stroke-width="1.5" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="grad1" x1="0" y1="0" x2="40" y2="40">
+              <stop offset="0%" stop-color="#4facfe"/>
+              <stop offset="100%" stop-color="#00d4aa"/>
+            </linearGradient>
+            <linearGradient id="grad2" x1="0" y1="0" x2="10" y2="10">
+              <stop offset="0%" stop-color="#4facfe"/>
+              <stop offset="100%" stop-color="#00d4aa"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <span class="brand-name">XAI-GYN</span>
+        <span class="brand-sub">Clinical AI</span>
+      </div>
+    </div>
+    <div class="nav-status" id="navStatus">
+      <div class="status-dot"></div>
+      <span>Sistem Hazır</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════ HERO ══════════════════ -->
+<header class="hero">
+  <div class="hero-bg">
+    <div class="hero-orb hero-orb-1"></div>
+    <div class="hero-orb hero-orb-2"></div>
+    <div class="hero-grid"></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Açıklanabilir Yapay Zeka · Versiyon 1.0
+    </div>
+    <h1 class="hero-title">
+      Jinekolojik Görüntü<br/>
+      <span class="gradient-text">AI Analizi</span>
+    </h1>
+    <p class="hero-desc">
+      Kolposkopi görüntülerinde benign/malign sınıflandırma · Grad-CAM ısı haritaları · 
+      Karşı-olgusal açıklama · Klinik karar destek sistemi
+    </p>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-val">EfficientNet-B0</span>
+        <span class="stat-lbl">Model Mimarisi</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-val">Grad-CAM</span>
+        <span class="stat-lbl">XAI Yöntemi</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-val">2 Sınıf</span>
+        <span class="stat-lbl">Benign / Malign</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════ MAIN CONTENT ══════════════════ -->
+<main class="main-container">
+
+  <!-- ─── UPLOAD PANEL ─── -->
+  <section class="upload-section card" id="uploadSection">
+    <div class="card-header">
+      <div class="card-icon upload-icon">📤</div>
+      <div>
+        <h2 class="card-title">Görüntü Yükle</h2>
+        <p class="card-subtitle">Kolposkopi görüntüsü seçin veya sürükleyin</p>
+      </div>
+    </div>
+
+    <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Görüntü yükle">
+      <input type="file" id="fileInput" accept="image/*" style="display:none" />
+      <div class="upload-animation" id="uploadAnimation">
+        <div class="upload-ring"></div>
+        <div class="upload-icon-wrapper">
+          <svg class="upload-svg" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="30" stroke="url(#ug)" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <path d="M32 44 L32 22" stroke="url(#ug2)" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M22 30 L32 20 L42 30" stroke="url(#ug2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20 48 L44 48" stroke="url(#ug2)" stroke-width="2.5" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="ug" x1="0" y1="0" x2="64" y2="64">
+                <stop offset="0%" stop-color="#4facfe" stop-opacity="0.4"/>
+                <stop offset="100%" stop-color="#00d4aa" stop-opacity="0.4"/>
+              </linearGradient>
+              <linearGradient id="ug2" x1="0" y1="0" x2="64" y2="64">
+                <stop offset="0%" stop-color="#4facfe"/>
+                <stop offset="100%" stop-color="#00d4aa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <p class="upload-hint">Görüntüyü buraya sürükleyin veya</p>
+        <button class="btn btn-primary" id="browseBtn" type="button">Dosya Seç</button>
+        <p class="upload-formats">JPG, PNG, BMP, TIFF — Maks. 32 MB</p>
+      </div>
+
+      <!-- Yüklenen görüntü önizlemesi -->
+      <div class="preview-container" id="previewContainer" style="display:none">
+        <img id="previewImg" alt="Önizleme" class="preview-img" />
+        <div class="preview-info" id="previewInfo"></div>
+        <div class="preview-actions">
+          <button class="btn btn-outline" id="resetBtn" type="button">🔄 Değiştir</button>
+          <button class="btn btn-primary btn-analyze" id="analyzeBtn" type="button">
+            <span class="btn-icon">🔬</span>
+            <span>Analiz Et</span>
+            <div class="btn-shimmer"></div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── LOADING ─── -->
+  <div class="loading-container" id="loadingContainer" style="display:none">
+    <div class="loading-card card">
+      <div class="loading-dna">
+        <div class="dna-strand"></div>
+        <div class="dna-strand dna-strand-2"></div>
+      </div>
+      <div class="loading-text">
+        <h3>AI Analizi Yapılıyor</h3>
+        <p id="loadingStep">Görüntü işleniyor...</p>
+      </div>
+      <div class="loading-steps">
+        <div class="step-item active" id="step1">
+          <div class="step-dot"></div>
+          <span>Ön İşleme</span>
+        </div>
+        <div class="step-item" id="step2">
+          <div class="step-dot"></div>
+          <span>Model Çıkarımı</span>
+        </div>
+        <div class="step-item" id="step3">
+          <div class="step-dot"></div>
+          <span>Grad-CAM</span>
+        </div>
+        <div class="step-item" id="step4">
+          <div class="step-dot"></div>
+          <span>Açıklama</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── RESULTS ─── -->
+  <section class="results-section" id="resultsSection" style="display:none">
+
+    <!-- Risk Skoru Kartı -->
+    <div class="results-top">
+      <div class="risk-card card" id="riskCard">
+        <div class="card-header">
+          <div class="card-icon">⚡</div>
+          <div>
+            <h2 class="card-title">Tahmin Sonucu</h2>
+            <p class="card-subtitle" id="processingTime"></p>
+          </div>
+          <div class="model-badge" id="modelBadge">Demo Modu</div>
+        </div>
+        <div class="risk-content">
+          <div class="gauge-container">
+            <svg class="gauge-svg" viewBox="0 0 200 120" id="gaugeSvg">
+              <!-- Arka plan ark -->
+              <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100"/>
+              <!-- Aktif ark -->
+              <path class="gauge-fill" id="gaugeFill" d="M 20 100 A 80 80 0 0 1 180 100" stroke-dasharray="0 251"/>
+              <!-- Merkez değer -->
+              <text class="gauge-value" id="gaugeValue" x="100" y="90" text-anchor="middle">0%</text>
+              <text class="gauge-label-svg" x="100" y="108" text-anchor="middle">Risk Skoru</text>
+              <text x="15" y="115" class="gauge-end-label">0</text>
+              <text x="185" y="115" class="gauge-end-label" text-anchor="end">100</text>
+            </svg>
+            <div class="gauge-class-badge" id="gaugeClass">—</div>
+          </div>
+
+          <div class="prob-bars">
+            <div class="prob-row">
+              <span class="prob-label benign-label">🟢 Benign</span>
+              <div class="prob-bar-track">
+                <div class="prob-bar-fill benign-fill" id="benignBar" style="width:0%"></div>
+              </div>
+              <span class="prob-val" id="benignVal">0%</span>
+            </div>
+            <div class="prob-row">
+              <span class="prob-label malign-label">🔴 Malign</span>
+              <div class="prob-bar-track">
+                <div class="prob-bar-fill malign-fill" id="malignBar" style="width:0%"></div>
+              </div>
+              <span class="prob-val" id="malignVal">0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Açıklama Metni -->
+      <div class="explanation-card card" id="explanationCard">
+        <div class="card-header">
+          <div class="card-icon">💡</div>
+          <div>
+            <h2 class="card-title">XAI Açıklaması</h2>
+            <p class="card-subtitle">Grad-CAM · Karşı-Olgusal Analiz</p>
+          </div>
+        </div>
+        <div class="explanation-text" id="explanationText"></div>
+        <div class="disclaimer">
+          ⚠️ Bu sistem araştırma amaçlıdır. Klinik tanı için yetkili uzman görüşü alınmalıdır.
+        </div>
+      </div>
+    </div>
+
+    <!-- Görüntü Karşılaştırma -->
+    <div class="image-comparison card" id="imageComparison">
+      <div class="card-header">
+        <div class="card-icon">🗺️</div>
+        <div>
+          <h2 class="card-title">Grad-CAM Isı Haritası</h2>
+          <p class="card-subtitle">Modelin dikkat ettiği bölgeler — kırmızı = yüksek risk</p>
+        </div>
+      </div>
+
+      <div class="comparison-grid">
+        <div class="img-panel">
+          <div class="img-label">📷 Orijinal Görüntü</div>
+          <img id="originalImg" alt="Orijinal" class="result-img" />
+        </div>
+        <div class="img-panel">
+          <div class="img-label">🔥 Isı Haritası</div>
+          <img id="heatmapImg" alt="Isı Haritası" class="result-img" />
+        </div>
+        <div class="img-panel highlight-panel">
+          <div class="img-label">🎯 Süperpozisyon (Overlay)</div>
+          <img id="overlayImg" alt="Grad-CAM Overlay" class="result-img" />
+          <div class="overlay-legend">
+            <span class="legend-item"><span class="legend-color cold"></span> Düşük Risk</span>
+            <span class="legend-item"><span class="legend-color hot"></span> Yüksek Risk</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Yeniden Analiz -->
+    <div class="reanalyze-bar">
+      <button class="btn btn-outline btn-lg" id="newAnalysisBtn" type="button">
+        🔄 Yeni Analiz Yap
+      </button>
+      <button class="btn btn-primary btn-lg" id="downloadBtn" type="button">
+        ⬇️ Sonucu İndir
+      </button>
+    </div>
+
+  </section>
+
+  <!-- ─── ERROR ─── -->
+  <div class="error-container card" id="errorContainer" style="display:none">
+    <div class="error-icon">❌</div>
+    <h3 class="error-title">Analiz Hatası</h3>
+    <p class="error-msg" id="errorMsg">Bir hata oluştu.</p>
+    <button class="btn btn-outline" id="errorRetryBtn" type="button">Tekrar Dene</button>
+  </div>
+
+</main>
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">XAI-GYN v1.0</div>
+    <div class="footer-links">
+      <span>EfficientNet-B0</span>
+      <span>·</span>
+      <span>Grad-CAM</span>
+      <span>·</span>
+      <span>Flask</span>
+      <span>·</span>
+      <span>Python</span>
+    </div>
+    <div class="footer-note">Araştırma Prototipi · Klinik tanı amaçlı değildir</div>
+  </div>
+</footer>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>

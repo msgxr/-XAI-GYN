@@ -1,0 +1,439 @@
+/**
+ * XAI-GYN | web/static/js/main.js
+ * Premium frontend logic — upload, analyze, animate, display
+ */
+
+'use strict';
+
+// ─── SVG Gradient Definitions (injected once) ───
+const SVG_DEFS = `
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#4facfe"/>
+      <stop offset="50%"  stop-color="#f7931e"/>
+      <stop offset="100%" stop-color="#ff4d6d"/>
+    </linearGradient>
+  </defs>
+</svg>`;
+document.body.insertAdjacentHTML('afterbegin', SVG_DEFS);
+
+// ─── DOM References ───────────────────────────
+const uploadZone       = document.getElementById('uploadZone');
+const fileInput        = document.getElementById('fileInput');
+const browseBtn        = document.getElementById('browseBtn');
+const uploadAnimation  = document.getElementById('uploadAnimation');
+const previewContainer = document.getElementById('previewContainer');
+const previewImg       = document.getElementById('previewImg');
+const previewInfo      = document.getElementById('previewInfo');
+const resetBtn         = document.getElementById('resetBtn');
+const analyzeBtn       = document.getElementById('analyzeBtn');
+const loadingContainer = document.getElementById('loadingContainer');
+const loadingStep      = document.getElementById('loadingStep');
+const resultsSection   = document.getElementById('resultsSection');
+const errorContainer   = document.getElementById('errorContainer');
+const errorMsg         = document.getElementById('errorMsg');
+const errorRetryBtn    = document.getElementById('errorRetryBtn');
+const newAnalysisBtn   = document.getElementById('newAnalysisBtn');
+const downloadBtn      = document.getElementById('downloadBtn');
+
+// Result elements
+const gaugeFill      = document.getElementById('gaugeFill');
+const gaugeValue     = document.getElementById('gaugeValue');
+const gaugeClass     = document.getElementById('gaugeClass');
+const benignBar      = document.getElementById('benignBar');
+const malignBar      = document.getElementById('malignBar');
+const benignVal      = document.getElementById('benignVal');
+const malignVal      = document.getElementById('malignVal');
+const explanationText = document.getElementById('explanationText');
+const processingTime = document.getElementById('processingTime');
+const modelBadge     = document.getElementById('modelBadge');
+const originalImg    = document.getElementById('originalImg');
+const heatmapImg     = document.getElementById('heatmapImg');
+const overlayImg     = document.getElementById('overlayImg');
+
+// State
+let selectedFile = null;
+let lastResult   = null;
+
+// ─── Gauge Arc Math ───────────────────────────
+// The gauge arc path is a half-circle (180°), total arc length ≈ 251px
+const GAUGE_ARC_LENGTH = 251;
+
+function setGauge(percentage) {
+  const dashValue = (percentage / 100) * GAUGE_ARC_LENGTH;
+  gaugeFill.setAttribute(
+    'stroke-dasharray',
+    `${dashValue.toFixed(2)} ${GAUGE_ARC_LENGTH}`
+  );
+  gaugeValue.textContent = `${Math.round(percentage)}%`;
+}
+
+// ─── Drag & Drop ──────────────────────────────
+['dragover', 'dragenter'].forEach(evt => {
+  uploadZone.addEventListener(evt, e => {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+});
+
+['dragleave', 'drop'].forEach(evt => {
+  uploadZone.addEventListener(evt, e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+  });
+});
+
+uploadZone.addEventListener('drop', e => {
+  const files = e.dataTransfer?.files;
+  if (files?.length) handleFile(files[0]);
+});
+
+// ─── Click Upload ─────────────────────────────
+uploadZone.addEventListener('click', () => {
+  if (!previewContainer.style.display || previewContainer.style.display === 'none') {
+    fileInput.click();
+  }
+});
+
+uploadZone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    fileInput.click();
+  }
+});
+
+browseBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', e => {
+  if (e.target.files?.length) handleFile(e.target.files[0]);
+});
+
+// ─── Handle Selected File ─────────────────────
+function handleFile(file) {
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff', 'image/tif'];
+  const MAX_SIZE = 32 * 1024 * 1024;
+
+  if (!ALLOWED_TYPES.includes(file.type) && !file.name.match(/\.(tiff|tif)$/i)) {
+    showError('Desteklenmeyen dosya türü. Lütfen JPG, PNG, BMP veya TIFF yükleyin.');
+    return;
+  }
+
+  if (file.size > MAX_SIZE) {
+    showError('Dosya boyutu 32 MB limitini aşıyor.');
+    return;
+  }
+
+  selectedFile = file;
+  hideResults();
+  hideError();
+
+  // Önizleme oluştur
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    previewImg.src = dataUrl;
+
+    // Dosya bilgisi
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    previewInfo.textContent = `${file.name}  ·  ${sizeMB} MB  ·  ${file.type || 'image'}`;
+
+    // Küçük gecikmeli boyut bilgisi ekle
+    const tempImg = new Image();
+    tempImg.onload = () => {
+      previewInfo.textContent += `  ·  ${tempImg.naturalWidth}×${tempImg.naturalHeight}px`;
+    };
+    tempImg.src = dataUrl;
+
+    uploadAnimation.style.display = 'none';
+    previewContainer.style.display = 'block';
+    previewContainer.classList.add('fade-in');
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Reset ────────────────────────────────────
+resetBtn.addEventListener('click', resetUpload);
+newAnalysisBtn.addEventListener('click', resetUpload);
+
+function resetUpload() {
+  selectedFile = null;
+  fileInput.value = '';
+  previewImg.src = '';
+  previewInfo.textContent = '';
+  previewContainer.style.display = 'none';
+  uploadAnimation.style.display = 'block';
+  hideResults();
+  hideError();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─── Analyze ──────────────────────────────────
+analyzeBtn.addEventListener('click', runAnalysis);
+
+async function runAnalysis() {
+  if (!selectedFile) return;
+
+  hideResults();
+  hideError();
+  showLoading();
+
+  // Loading adım animasyonu
+  const steps = ['step1', 'step2', 'step3', 'step4'];
+  const stepMessages = [
+    'Görüntü ön işleme yapılıyor...',
+    'Model çıkarımı çalışıyor...',
+    'Grad-CAM ısı haritası üretiliyor...',
+    'Açıklama metni oluşturuluyor...',
+  ];
+  let stepDelay = 0;
+  steps.forEach((sid, idx) => {
+    setTimeout(() => {
+      steps.forEach(s => {
+        const el = document.getElementById(s);
+        if (el) el.classList.remove('active');
+      });
+      // Mark previous as done
+      if (idx > 0) {
+        const prev = document.getElementById(steps[idx - 1]);
+        if (prev) {
+          prev.classList.remove('active');
+          prev.classList.add('done');
+        }
+      }
+      const current = document.getElementById(sid);
+      if (current) current.classList.add('active');
+      if (loadingStep) loadingStep.textContent = stepMessages[idx];
+    }, stepDelay);
+    stepDelay += 1000;
+  });
+
+  // FormData
+  const formData = new FormData();
+  formData.append('image', selectedFile);
+  formData.append('xai_method', 'gradcam');
+
+  try {
+    const response = await fetch('/predict', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `Sunucu hatası: ${response.status}`);
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    lastResult = data;
+
+    // Mark all steps done
+    setTimeout(() => {
+      steps.forEach(sid => {
+        const el = document.getElementById(sid);
+        if (el) {
+          el.classList.remove('active');
+          el.classList.add('done');
+        }
+      });
+
+      setTimeout(() => {
+        hideLoading();
+        displayResults(data);
+      }, 500);
+    }, stepDelay - 200);
+
+  } catch (err) {
+    console.error('Analysis error:', err);
+    hideLoading();
+    showError(err.message || 'Sunucuya bağlanılamadı. Flask uygulamasının çalıştığından emin olun.');
+  }
+}
+
+// ─── Display Results ──────────────────────────
+function displayResults(data) {
+  // Model badge
+  if (data.model_status === 'checkpoint') {
+    modelBadge.textContent = '🔬 Eğitilmiş Model';
+    modelBadge.classList.add('live');
+  } else {
+    modelBadge.textContent = '⚗️ Demo Modu';
+  }
+
+  // Processing time
+  processingTime.textContent = `İşlem süresi: ${data.processing_ms} ms`;
+
+  // Animasyonlu gauge (malign skoru)
+  const malignPct = data.probabilities.malign;
+  setTimeout(() => setGauge(malignPct), 100);
+
+  // Sınıf badge
+  const ismalign = data.class_idx === 1;
+  gaugeClass.textContent = ismalign ? '🔴 MALİGN' : '🟢 BENİGN';
+  gaugeClass.classList.toggle('malign-class', ismalign);
+  gaugeClass.classList.toggle('benign-class', !ismalign);
+
+  // Probability bars (animasyonlu)
+  setTimeout(() => {
+    benignBar.style.width = `${data.probabilities.benign}%`;
+    malignBar.style.width = `${data.probabilities.malign}%`;
+    benignVal.textContent = `${data.probabilities.benign}%`;
+    malignVal.textContent = `${data.probabilities.malign}%`;
+  }, 200);
+
+  // Açıklama
+  explanationText.textContent = data.explanation;
+
+  // Görüntüler
+  originalImg.src = `data:image/png;base64,${data.original_b64}`;
+  heatmapImg.src  = `data:image/png;base64,${data.heatmap_b64}`;
+  overlayImg.src  = `data:image/png;base64,${data.overlay_b64}`;
+
+  // Sonuçları göster
+  showResults();
+
+  // Sayfayı aşağı kaydır
+  setTimeout(() => {
+    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 200);
+}
+
+// ─── Download ─────────────────────────────────
+downloadBtn.addEventListener('click', downloadResults);
+
+function downloadResults() {
+  if (!lastResult) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = 1200;
+  canvas.height = 700;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Title
+  ctx.fillStyle = '#4facfe';
+  ctx.font = 'bold 28px Inter, sans-serif';
+  ctx.fillText('XAI-GYN — Analiz Sonucu', 40, 55);
+
+  // Result text
+  ctx.fillStyle = '#8ba4c0';
+  ctx.font = '16px Inter, sans-serif';
+  ctx.fillText(`Tahmin: ${lastResult.class_name}  |  Güven: ${lastResult.confidence}%  |  Malign Risk: ${lastResult.probabilities.malign}%`, 40, 90);
+
+  const drawB64 = (b64, x, y, w, h) => {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, x, y, w, h); resolve(); };
+      img.src = `data:image/png;base64,${b64}`;
+    });
+  };
+
+  Promise.all([
+    drawB64(lastResult.original_b64, 40,  120, 360, 360),
+    drawB64(lastResult.heatmap_b64,  430, 120, 360, 360),
+    drawB64(lastResult.overlay_b64,  820, 120, 360, 360),
+  ]).then(() => {
+    // Labels
+    ctx.fillStyle = '#5a7090';
+    ctx.font = '13px Inter';
+    ctx.fillText('Orijinal', 40, 510);
+    ctx.fillText('Isı Haritası', 430, 510);
+    ctx.fillText('Overlay (Grad-CAM)', 820, 510);
+
+    // Explanation snippet
+    ctx.fillStyle = '#8ba4c0';
+    ctx.font = '13px Inter';
+    const lines = lastResult.explanation.split('\n').slice(0, 6);
+    lines.forEach((line, i) => ctx.fillText(line.slice(0, 120), 40, 550 + i * 22));
+
+    // Timestamp
+    ctx.fillStyle = '#3a5070';
+    ctx.font = '11px Inter';
+    ctx.fillText(`XAI-GYN v1.0 · ${new Date().toLocaleString('tr-TR')}`, 40, 685);
+
+    // Download
+    const a = document.createElement('a');
+    a.href     = canvas.toDataURL('image/png');
+    a.download = `xai_gyn_sonuc_${Date.now()}.png`;
+    a.click();
+  });
+}
+
+// ─── UI State Helpers ─────────────────────────
+function showLoading() {
+  loadingContainer.style.display = 'block';
+  loadingContainer.classList.add('fade-in');
+  analyzeBtn.disabled = true;
+  // Reset step indicators
+  ['step1','step2','step3','step4'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) { el.classList.remove('active', 'done'); }
+  });
+}
+
+function hideLoading() {
+  loadingContainer.style.display = 'none';
+  analyzeBtn.disabled = false;
+}
+
+function showResults() {
+  resultsSection.style.display = 'block';
+  resultsSection.classList.add('fade-in');
+}
+
+function hideResults() {
+  resultsSection.style.display = 'none';
+}
+
+function showError(message) {
+  errorMsg.textContent = message;
+  errorContainer.style.display = 'block';
+  errorContainer.classList.add('fade-in');
+  errorContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function hideError() {
+  errorContainer.style.display = 'none';
+}
+
+// ─── Error retry ──────────────────────────────
+errorRetryBtn.addEventListener('click', () => {
+  if (selectedFile) {
+    hideError();
+    runAnalysis();
+  } else {
+    hideError();
+    resetUpload();
+  }
+});
+
+// ─── Health Check on Load ─────────────────────
+window.addEventListener('load', async () => {
+  try {
+    const res = await fetch('/health');
+    if (res.ok) {
+      const data = await res.json();
+      const statusEl = document.querySelector('.nav-status span');
+      if (statusEl) {
+        statusEl.textContent = data.model_status === 'checkpoint'
+          ? 'Model Yüklendi ✓'
+          : 'Demo Modu Aktif';
+      }
+    }
+  } catch {
+    const statusEl = document.querySelector('.nav-status span');
+    if (statusEl) statusEl.textContent = 'Sunucu Bekleniyor...';
+    const dot = document.querySelector('.status-dot');
+    if (dot) dot.style.background = '#ff4d6d';
+  }
+});
