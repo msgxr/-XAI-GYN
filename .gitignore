@@ -71,6 +71,7 @@ models/checkpoints/*.pth
 models/checkpoints/*.pt
 *.pth
 *.pt
+!models/checkpoints/best_model.pth
 
 # Output
 output/
