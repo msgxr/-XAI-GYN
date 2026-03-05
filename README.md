@@ -127,3 +127,5 @@ Bu proje **araştırma ve eğitim amaçlıdır**. Klinik tanı kararları için 
 - [SIPaKMeD](https://www.cs.uoi.gr/~marina/sipakmed.html) — Servikal sitoloji
 - [MobileODT](https://www.kaggle.com/c/intel-mobileodt-cervical-cancer-screening) — Kolposkopi
 - [Herlev Dataset](http://mde-lab.aegean.gr/index.php/downloads) — Servikal hücre
+
+> **Yerel veri:** `veri setleri/celler_150200` dizininde 1000+ hücre görüntüsü var. Bu dosyaların GitHub `veri setleri` klasörüne eklenmesi için aşağıdaki adımları takip edin.
