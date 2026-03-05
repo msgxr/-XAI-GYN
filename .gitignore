@@ -93,3 +93,9 @@ instance/
 .tmp
 **/temp/
 **/tmp/
+
+# Keep dataset images
+!veri setleri/**/*.jpg
+!veri setleri/**/*.JPG
+!veri setleri/**/*.jpeg
+!veri setleri/**/*.png
