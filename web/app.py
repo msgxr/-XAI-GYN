@@ -151,6 +151,15 @@ def predict():
         malign_prob     = gradcam_result["probabilities"][1]
         lezyon_detected = malign_prob > 0.3  # %30 uzerinde malign riski = lezyon var
 
+        # ── Counterfactual (Karşı-Olgusal) XAI Analizi ──
+        try:
+            from src.xai.counterfactual import generate_counterfactual_explanation
+            current_class = gradcam_result["class_name"]
+            cf_text = generate_counterfactual_explanation(model, pil_img, malign_prob, current_class, device)
+        except Exception as e:
+            print(f"[App] Counterfactual hatasi: {e}")
+            cf_text = ""
+
         # Base64 donusumleri
         original_b64 = pil_to_b64(pil_img.resize((400, 400)))
         heatmap_b64  = ndarray_to_b64(colorize_heatmap(gradcam_result["heatmap"]))
@@ -189,6 +198,10 @@ def predict():
             gradcam_result["explanation"]
             + f"\n\n📋 {modality_notes[modality]}"
         )
+        
+        # Eğer counterfactual metni varsa sonuna ekle
+        if cf_text:
+            explanation += f"\n\n{cf_text}"
 
         return jsonify({
             "class_name"     : gradcam_result["class_name"],
