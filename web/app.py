@@ -194,21 +194,39 @@ def predict():
                 contours_400, _ = cv2.findContours(mask_400, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 segmented_img_np = cv2.drawContours(original_resized.copy(), contours_400, -1, (0, 255, 0), 2)
             else:
-                # Demo Modu Fallback (Kesin Çözüm v2 - ELİPS)
-                # Isı haritasındaki EN SICAK pikseli bul ve oraya bir daire/elips çiz.
+                # ── Demo Modu Fallback (Kesin Çözüm v8 - LASER PRECISION) ──
                 try:
-                    raw_heatmap = gradcam_result["heatmap"] # [224, 224]
-                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(raw_heatmap)
-                    center_x = int(max_loc[0] * (400 / 224))
-                    center_y = int(max_loc[1] * (400 / 224))
+                    raw_hm = gradcam_result["heatmap"]
+                    mh, mw = raw_hm.shape
+                    
+                    # 1. Ham haritadaki en sıcak bölgeleri (threshold > 0.8) bul
+                    # Not: max_v bazen 0 olabilir, hata kontrolünü yapalım
+                    max_v = np.max(raw_hm)
+                    thresh = max_v * 0.85 if max_v > 0.1 else 0.5
+                    y_indices, x_indices = np.where(raw_hm >= thresh)
                     
                     segmented_img_np = original_resized.copy()
-                    if max_val > 0.1:
-                        cv2.ellipse(segmented_img_np, (center_x, center_y), (50, 40), 0, 0, 360, (0, 255, 0), 3)
-                except:
+                    
+                    # 2. Koordinatları manuel olarak 400x400'e haritalayıp çiz
+                    draw_count = 0
+                    for i in range(len(y_indices)):
+                        ry, rx = y_indices[i], x_indices[i]
+                        
+                        # 400 piksel üzerine milimetrik hiza
+                        cx = int((rx + 0.5) * (400 / mw))
+                        cy = int((ry + 0.5) * (400 / mh))
+                        
+                        # Belirgin bir halka çiz
+                        cv2.circle(segmented_img_np, (cx, cy), 40, (0, 255, 0), 3)
+                        draw_count += 1
+                        if draw_count > 4: break # Çok kalabalık yapma
+                    
+                    print(f"[App] Laser-Fix: {draw_count} bölge çizildi. Peak: {max_v:.2f}")
+                        
+                except Exception as e:
+                    print(f"[App] Laser Precision Error: {e}")
                     segmented_img_np = original_resized
 
-            segmentation_b64 = ndarray_to_b64(segmented_img_np)
             segmentation_b64 = ndarray_to_b64(segmented_img_np)
         except Exception as e:
             print(f"[App] BI-V3 U-Net Hatasi: {e}")
