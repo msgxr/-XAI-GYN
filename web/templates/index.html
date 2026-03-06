@@ -62,8 +62,8 @@
       <span class="gradient-text">AI Analizi</span>
     </h1>
     <p class="hero-desc">
-      Kolposkopi görüntülerinde benign/malign sınıflandırma · Grad-CAM ısı haritaları · 
-      Karşı-olgusal açıklama · Klinik karar destek sistemi
+      Ultrason · Kolposkopi · Laparoskopi görüntülerinde benign/malign sınıflandırma
+      · Grad-CAM / LIME / SHAP · Karşı-olgusal açıklama · Klinik karar destek
     </p>
     <div class="hero-stats">
       <div class="stat-item">
@@ -72,13 +72,13 @@
       </div>
       <div class="stat-divider"></div>
       <div class="stat-item">
-        <span class="stat-val">Grad-CAM</span>
-        <span class="stat-lbl">XAI Yöntemi</span>
+        <span class="stat-val">Grad-CAM · LIME · SHAP</span>
+        <span class="stat-lbl">XAI Yöntemleri</span>
       </div>
       <div class="stat-divider"></div>
       <div class="stat-item">
-        <span class="stat-val">2 Sınıf</span>
-        <span class="stat-lbl">Benign / Malign</span>
+        <span class="stat-val">3 Modalite</span>
+        <span class="stat-lbl">Ultrason · Kolposkopi · Laparoskopi</span>
       </div>
     </div>
   </div>
@@ -93,7 +93,27 @@
       <div class="card-icon upload-icon">📤</div>
       <div>
         <h2 class="card-title">Görüntü Yükle</h2>
-        <p class="card-subtitle">Kolposkopi görüntüsü seçin veya sürükleyin</p>
+        <p class="card-subtitle">Tıbbi görüntü seçin veya sürükleyin</p>
+      </div>
+    </div>
+
+    <!-- Modalite Seçimi -->
+    <div class="option-group" id="modalityGroup">
+      <label class="option-label">🦷 Görüntü Türü</label>
+      <div class="option-buttons" role="group" aria-label="Görüntü Türü">
+        <button class="opt-btn active" id="mod-kolposkopi" data-value="kolposkopi" type="button">🔍 Kolposkopi</button>
+        <button class="opt-btn" id="mod-ultrason" data-value="ultrason" type="button">🟦 Ultrason</button>
+        <button class="opt-btn" id="mod-laparoskopi" data-value="laparoskopi" type="button">🔬 Laparoskopi</button>
+      </div>
+    </div>
+
+    <!-- XAI Yöntemi Seçimi -->
+    <div class="option-group" id="xaiGroup">
+      <label class="option-label">🧠 XAI Yöntemi</label>
+      <div class="option-buttons" role="group" aria-label="XAI Yöntemi">
+        <button class="opt-btn active" id="xai-gradcam" data-value="gradcam" type="button">🔥 Grad-CAM</button>
+        <button class="opt-btn" id="xai-lime" data-value="lime" type="button">🟢 LIME</button>
+        <button class="opt-btn" id="xai-shap" data-value="shap" type="button">🟣 SHAP</button>
       </div>
     </div>
 
@@ -186,14 +206,18 @@
           </div>
           <div class="model-badge" id="modelBadge">Demo Modu</div>
         </div>
+
+        <!-- Lezyon Tespiti Bantı -->
+        <div class="lezyon-banner" id="lezyonBanner" style="display:none">
+          <span class="lezyon-icon" id="lezyonIcon">∅</span>
+          <span id="lezyonText">—</span>
+        </div>
+
         <div class="risk-content">
           <div class="gauge-container">
             <svg class="gauge-svg" viewBox="0 0 200 120" id="gaugeSvg">
-              <!-- Arka plan ark -->
               <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100"/>
-              <!-- Aktif ark -->
               <path class="gauge-fill" id="gaugeFill" d="M 20 100 A 80 80 0 0 1 180 100" stroke-dasharray="0 251"/>
-              <!-- Merkez değer -->
               <text class="gauge-value" id="gaugeValue" x="100" y="90" text-anchor="middle">0%</text>
               <text class="gauge-label-svg" x="100" y="108" text-anchor="middle">Risk Skoru</text>
               <text x="15" y="115" class="gauge-end-label">0</text>
@@ -218,6 +242,9 @@
               <span class="prob-val" id="malignVal">0%</span>
             </div>
           </div>
+
+          <!-- XAI + Modalite Etiketi -->
+          <div class="analysis-meta" id="analysisMeta"></div>
         </div>
       </div>
 
@@ -227,7 +254,7 @@
           <div class="card-icon">💡</div>
           <div>
             <h2 class="card-title">XAI Açıklaması</h2>
-            <p class="card-subtitle">Grad-CAM · Karşı-Olgusal Analiz</p>
+            <p class="card-subtitle" id="xaiMethodLabel">Grad-CAM · Karşı-Olgusal Analiz</p>
           </div>
         </div>
         <div class="explanation-text" id="explanationText"></div>
@@ -242,8 +269,8 @@
       <div class="card-header">
         <div class="card-icon">🗺️</div>
         <div>
-          <h2 class="card-title">Grad-CAM Isı Haritası</h2>
-          <p class="card-subtitle">Modelin dikkat ettiği bölgeler — kırmızı = yüksek risk</p>
+          <h2 class="card-title">XAI Görselleştirme</h2>
+          <p class="card-subtitle" id="xaiVisualLabel">Modelin dikkat ettiği bölgeler — kırmızı = yüksek risk</p>
         </div>
       </div>
 
@@ -253,12 +280,12 @@
           <img id="originalImg" alt="Orijinal" class="result-img" />
         </div>
         <div class="img-panel">
-          <div class="img-label">🔥 Isı Haritası</div>
+          <div class="img-label">🔥 ısı Haritası (Grad-CAM)</div>
           <img id="heatmapImg" alt="Isı Haritası" class="result-img" />
         </div>
         <div class="img-panel highlight-panel">
-          <div class="img-label">🎯 Süperpozisyon (Overlay)</div>
-          <img id="overlayImg" alt="Grad-CAM Overlay" class="result-img" />
+          <div class="img-label" id="overlayLabel">🎯 Süperpozisyon (XAI Overlay)</div>
+          <img id="overlayImg" alt="XAI Overlay" class="result-img" />
           <div class="overlay-legend">
             <span class="legend-item"><span class="legend-color cold"></span> Düşük Risk</span>
             <span class="legend-item"><span class="legend-color hot"></span> Yüksek Risk</span>
@@ -292,15 +319,15 @@
 <!-- ══════════════════ FOOTER ══════════════════ -->
 <footer class="footer">
   <div class="footer-inner">
-    <div class="footer-brand">XAI-GYN v1.0</div>
+    <div class="footer-brand">XAI-GYN v2.0</div>
     <div class="footer-links">
       <span>EfficientNet-B0</span>
       <span>·</span>
-      <span>Grad-CAM</span>
+      <span>Grad-CAM · LIME · SHAP</span>
+      <span>·</span>
+      <span>Kolposkopi · Ultrason · Laparoskopi</span>
       <span>·</span>
       <span>Flask</span>
-      <span>·</span>
-      <span>Python</span>
     </div>
     <div class="footer-note">Araştırma Prototipi · Klinik tanı amaçlı değildir</div>
   </div>

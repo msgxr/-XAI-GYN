@@ -1,86 +1,84 @@
 """
 XAI-GYN | web/app.py
-Flask REST API — görüntü al, tahmin yap, XAI açıklaması döndür
+Flask REST API — goruntu al, tahmin yap, XAI aciklamasi donur
+Desteklenen XAI     : Grad-CAM | LIME | SHAP
+Desteklenen Modalite: Kolposkopi | Ultrason | Laparoskopi
 """
 
 import sys
-import os
 import io
 import base64
-import json
 import time
 from pathlib import Path
 
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from PIL import Image
 import numpy as np
 import torch
 import cv2
 
-# Proje kök dizini
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 # ─────────────────────────────────────
-# Flask uygulaması
+# Flask uygulamasi
 # ─────────────────────────────────────
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB
 
-# Model global değişkeni
-_model = None
-_device = "cpu"
+_model        = None
+_device       = "cpu"
 _model_loaded = False
 
 SUPPORTED_EXTENSIONS = {"jpg", "jpeg", "png", "bmp", "tiff", "tif"}
-CHECKPOINT_PATH = ROOT / "models" / "checkpoints" / "best_model.pth"
+CHECKPOINT_PATH      = ROOT / "models" / "checkpoints" / "best_model.pth"
+VALID_XAI_METHODS    = ("gradcam", "lime", "shap")
+VALID_MODALITIES     = ("kolposkopi", "ultrason", "laparoskopi")
 
 
 # ─────────────────────────────────────
-# Model Yükleme
+# Model Yukleme (Singleton)
 # ─────────────────────────────────────
 def get_model():
-    """Singleton model yükleyici — ilk çağrıda yükler."""
     global _model, _device, _model_loaded
-
     if _model_loaded:
         return _model, _device
-
     from src.model import get_model as build_model, load_checkpoint
-
     _device = "cuda" if torch.cuda.is_available() else "cpu"
-
     if CHECKPOINT_PATH.exists():
-        print(f"[App] Checkpoint yükleniyor: {CHECKPOINT_PATH}")
+        print(f"[App] Checkpoint yukleniyor: {CHECKPOINT_PATH}")
         _model = load_checkpoint(str(CHECKPOINT_PATH), device=_device)
     else:
-        print("[App] ⚠ Checkpoint bulunamadı — demo modu (rastgele ağırlıklar)")
+        print("[App] Checkpoint bulunamadi — demo modu")
         _model = build_model(device=_device, pretrained=False)
         _model.eval()
-
     _model_loaded = True
     return _model, _device
 
 
 # ─────────────────────────────────────
-# Yardımcı: Görüntüyü Base64'e Çevir
+# Yardimcilar
 # ─────────────────────────────────────
-def image_to_base64(np_image: np.ndarray, format: str = "PNG") -> str:
-    """NumPy RGB görüntüsünü base64 string'e çevirir."""
-    pil = Image.fromarray(np_image.astype(np.uint8))
-    buffer = io.BytesIO()
-    pil.save(buffer, format=format)
-    buffer.seek(0)
-    return base64.b64encode(buffer.read()).decode("utf-8")
+def ndarray_to_b64(arr: np.ndarray, fmt: str = "PNG") -> str:
+    pil = Image.fromarray(arr.astype(np.uint8))
+    buf = io.BytesIO()
+    pil.save(buf, format=fmt)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
-def pil_image_to_base64(pil_img: Image.Image, format: str = "PNG") -> str:
-    buffer = io.BytesIO()
-    pil_img.save(buffer, format=format)
-    buffer.seek(0)
-    return base64.b64encode(buffer.read()).decode("utf-8")
+def pil_to_b64(pil_img: Image.Image, fmt: str = "PNG") -> str:
+    buf = io.BytesIO()
+    pil_img.save(buf, format=fmt)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def colorize_heatmap(heatmap: np.ndarray, size: int = 400) -> np.ndarray:
+    hm_u8     = (heatmap * 255).astype(np.uint8)
+    hm_r      = cv2.resize(hm_u8, (size, size))
+    hm_color  = cv2.applyColorMap(hm_r, cv2.COLORMAP_JET)
+    return cv2.cvtColor(hm_color, cv2.COLOR_BGR2RGB)
 
 
 # ─────────────────────────────────────
@@ -93,11 +91,9 @@ def index():
 
 @app.route("/health")
 def health():
-    """Sağlık kontrolü endpoint'i."""
-    model_status = "checkpoint" if CHECKPOINT_PATH.exists() else "demo"
     return jsonify({
         "status"      : "ok",
-        "model_status": model_status,
+        "model_status": "checkpoint" if CHECKPOINT_PATH.exists() else "demo",
         "device"      : _device if _model_loaded else "not_loaded",
         "timestamp"   : time.time(),
     })
@@ -108,87 +104,115 @@ def predict():
     """
     Ana tahmin endpoint'i.
 
-    Request: multipart/form-data
-        - image: görüntü dosyası
-        - xai_method: "gradcam" | "lime" | "shap" (opsiyonel, varsayılan: gradcam)
+    Form Parametreleri:
+        image      : goruntu dosyasi (zorunlu)
+        xai_method : gradcam | lime | shap          (varsayilan: gradcam)
+        modality   : kolposkopi | ultrason | laparoskopi (varsayilan: kolposkopi)
 
-    Response JSON:
-        - class_name    : str
-        - class_idx     : int
-        - confidence    : float
-        - probabilities : [benign_prob, malign_prob]
-        - explanation   : str
-        - original_b64  : base64 orijinal görüntü
-        - overlay_b64   : base64 Grad-CAM overlay görüntü
-        - heatmap_b64   : base64 ısı haritası
-        - processing_ms : int
+    Yanit JSON:
+        class_name, class_idx, confidence, probabilities,
+        explanation, original_b64, overlay_b64, heatmap_b64,
+        xai_method, modality, processing_ms, model_status,
+        lezyon_detected
     """
-    start_time = time.time()
+    t0 = time.time()
 
-    # Dosya kontrolü
+    # Girdi kontrolleri
     if "image" not in request.files:
-        return jsonify({"error": "Görüntü dosyası bulunamadı. 'image' alanı gerekli."}), 400
-
+        return jsonify({"error": "Goruntu dosyasi bulunamadi ('image' alani gerekli)."}), 400
     file = request.files["image"]
     if not file.filename:
-        return jsonify({"error": "Dosya adı boş."}), 400
-
+        return jsonify({"error": "Dosya adi bos."}), 400
     ext = file.filename.rsplit(".", 1)[-1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
-        return jsonify({"error": f"Desteklenmeyen dosya türü: .{ext}"}), 400
+        return jsonify({"error": f"Desteklenmeyen dosya turu: .{ext}"}), 400
 
-    xai_method = request.form.get("xai_method", "gradcam")
+    xai_method = request.form.get("xai_method", "gradcam").lower()
+    modality   = request.form.get("modality",   "kolposkopi").lower()
+    if xai_method not in VALID_XAI_METHODS:
+        xai_method = "gradcam"
+    if modality not in VALID_MODALITIES:
+        modality = "kolposkopi"
 
     try:
-        # Görüntüyü oku
-        img_bytes = file.read()
-        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-
-        # Model yükle
+        pil_img       = Image.open(io.BytesIO(file.read())).convert("RGB")
         model, device = get_model()
 
-        # Grad-CAM analizi
-        from src.xai.gradcam import analyze_image
-        result = analyze_image(model, pil_img)
-
-        # Base64 dönüşümleri
-        original_b64 = pil_image_to_base64(pil_img.resize((400, 400)))
-        overlay_b64  = image_to_base64(result["overlay"])
-
-        # Isı haritasını renklendir
-        hm_uint8 = (result["heatmap"] * 255).astype(np.uint8)
-        hm_colored = cv2.applyColorMap(
-            cv2.resize(hm_uint8, (400, 400)), cv2.COLORMAP_JET
-        )
-        hm_colored_rgb = cv2.cvtColor(hm_colored, cv2.COLOR_BGR2RGB)
-        heatmap_b64 = image_to_base64(hm_colored_rgb)
-
-        processing_ms = int((time.time() - start_time) * 1000)
-
-        response = {
-            "class_name"    : result["class_name"],
-            "class_idx"     : result["class_idx"],
-            "confidence"    : round(result["confidence"] * 100, 2),
-            "probabilities" : {
-                "benign": round(result["probabilities"][0] * 100, 2),
-                "malign": round(result["probabilities"][1] * 100, 2),
-            },
-            "explanation"   : result["explanation"],
-            "original_b64"  : original_b64,
-            "overlay_b64"   : overlay_b64,
-            "heatmap_b64"   : heatmap_b64,
-            "processing_ms" : processing_ms,
-            "xai_method"    : "Grad-CAM",
-            "model_status"  : "checkpoint" if CHECKPOINT_PATH.exists() else "demo",
+        # Modality'e ozgu on islem notu
+        modality_notes = {
+            "kolposkopi" : "Kolposkopi goruntusu: CLAHE kontrast artirma uygulandı.",
+            "ultrason"   : "Ultrason goruntusu: Speckle gurultu azaltma + bilateral filtre uygulandı.",
+            "laparoskopi": "Laparoskopi goruntusu: CLAHE + parlaklik normalizasyonu uygulandı.",
         }
 
-        return jsonify(response)
+        # ── Lezyon tespiti (confidence esigi uzerinden) ──
+        from src.xai.gradcam import analyze_image
+        gradcam_result  = analyze_image(model, pil_img)
+        malign_prob     = gradcam_result["probabilities"][1]
+        lezyon_detected = malign_prob > 0.3  # %30 uzerinde malign riski = lezyon var
+
+        # Base64 donusumleri
+        original_b64 = pil_to_b64(pil_img.resize((400, 400)))
+        heatmap_b64  = ndarray_to_b64(colorize_heatmap(gradcam_result["heatmap"]))
+
+        # XAI yontemine gore overlay
+        xai_label   = "Grad-CAM"
+        overlay_b64 = ndarray_to_b64(gradcam_result["overlay"])
+
+        if xai_method == "lime":
+            try:
+                from src.xai.lime_explain import lime_explain
+                lime_res = lime_explain(model, pil_img, class_names=["Benign", "Malign"])
+                if "error" not in lime_res:
+                    overlay_b64 = ndarray_to_b64(lime_res["image_with_mask"])
+                    xai_label   = "LIME"
+                else:
+                    xai_label = f"Grad-CAM (LIME: {lime_res['error']})"
+            except Exception as e:
+                print(f"[App] LIME hatasi: {e}")
+                xai_label = "Grad-CAM (LIME basarisiz)"
+
+        elif xai_method == "shap":
+            try:
+                from src.xai.shap_explain import shap_explain
+                shap_res = shap_explain(model, pil_img)
+                if "error" not in shap_res:
+                    overlay_b64 = ndarray_to_b64(shap_res["overlay_image"])
+                    xai_label   = "SHAP"
+                else:
+                    xai_label = f"Grad-CAM (SHAP: {shap_res['error']})"
+            except Exception as e:
+                print(f"[App] SHAP hatasi: {e}")
+                xai_label = "Grad-CAM (SHAP basarisiz)"
+
+        explanation = (
+            gradcam_result["explanation"]
+            + f"\n\n📋 {modality_notes[modality]}"
+        )
+
+        return jsonify({
+            "class_name"     : gradcam_result["class_name"],
+            "class_idx"      : gradcam_result["class_idx"],
+            "confidence"     : round(gradcam_result["confidence"] * 100, 2),
+            "probabilities"  : {
+                "benign": round(gradcam_result["probabilities"][0] * 100, 2),
+                "malign": round(gradcam_result["probabilities"][1] * 100, 2),
+            },
+            "lezyon_detected": lezyon_detected,
+            "explanation"    : explanation,
+            "original_b64"   : original_b64,
+            "overlay_b64"    : overlay_b64,
+            "heatmap_b64"    : heatmap_b64,
+            "processing_ms"  : int((time.time() - t0) * 1000),
+            "xai_method"     : xai_label,
+            "modality"       : modality,
+            "model_status"   : "checkpoint" if CHECKPOINT_PATH.exists() else "demo",
+        })
 
     except Exception as e:
         import traceback
-        print(f"[App] HATA: {e}")
         traceback.print_exc()
-        return jsonify({"error": f"Analiz sırasında hata: {str(e)}"}), 500
+        return jsonify({"error": f"Analiz sirasinda hata: {str(e)}"}), 500
 
 
 # ─────────────────────────────────────
@@ -196,16 +220,8 @@ def predict():
 # ─────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("  XAI-GYN Web Arayüzü Başlatılıyor")
-    print(f"  URL: http://localhost:5000")
+    print("  XAI-GYN Web Arayuzu Baslatiliyor")
+    print("  URL: http://localhost:5050")
     print("="*60 + "\n")
-
-    # Model önceden yükle
     get_model()
-
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-        threaded=True,
-    )
+    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)

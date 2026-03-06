@@ -53,8 +53,28 @@ const heatmapImg     = document.getElementById('heatmapImg');
 const overlayImg     = document.getElementById('overlayImg');
 
 // State
-let selectedFile = null;
-let lastResult   = null;
+let selectedFile     = null;
+let lastResult       = null;
+let selectedModality = 'kolposkopi';  // varsayilan
+let selectedXai      = 'gradcam';     // varsayilan
+
+// ─── Opt-Button Gruplari (Modalite + XAI) ──────
+function bindOptionGroup(groupId, onChange) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.opt-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      group.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      onChange(btn.dataset.value);
+    });
+  });
+}
+
+bindOptionGroup('modalityGroup', (val) => { selectedModality = val; });
+bindOptionGroup('xaiGroup',      (val) => { selectedXai      = val; });
+
 
 // ─── Gauge Arc Math ───────────────────────────
 // The gauge arc path is a half-circle (180°), total arc length ≈ 251px
@@ -213,8 +233,10 @@ async function runAnalysis() {
 
   // FormData
   const formData = new FormData();
-  formData.append('image', selectedFile);
-  formData.append('xai_method', 'gradcam');
+  formData.append('image',      selectedFile);
+  formData.append('xai_method', selectedXai);
+  formData.append('modality',   selectedModality);
+
 
   try {
     const response = await fetch('/predict', {
@@ -261,22 +283,56 @@ async function runAnalysis() {
 function displayResults(data) {
   // Model badge
   if (data.model_status === 'checkpoint') {
-    modelBadge.textContent = '🔬 Eğitilmiş Model';
+    modelBadge.textContent = '🔬 Egitilmis Model';
     modelBadge.classList.add('live');
   } else {
     modelBadge.textContent = '⚗️ Demo Modu';
   }
 
   // Processing time
-  processingTime.textContent = `İşlem süresi: ${data.processing_ms} ms`;
+  processingTime.textContent = `Islem suresi: ${data.processing_ms} ms`;
+
+  // Lezyon Tespiti Banner
+  const lezyonBanner = document.getElementById('lezyonBanner');
+  const lezyonIcon   = document.getElementById('lezyonIcon');
+  const lezyonText   = document.getElementById('lezyonText');
+  if (lezyonBanner && lezyonIcon && lezyonText) {
+    lezyonBanner.style.display = 'flex';
+    if (data.lezyon_detected) {
+      lezyonIcon.textContent = '⚠️';
+      lezyonText.textContent = 'Lezyon Tespit Edildi — Detayli analiz yapiliyor';
+      lezyonBanner.className = 'lezyon-banner lezyon-detected';
+    } else {
+      lezyonIcon.textContent = '✅';
+      lezyonText.textContent = 'Belirgin Lezyon Bulgusuna Rastlanmadi';
+      lezyonBanner.className = 'lezyon-banner lezyon-clear';
+    }
+  }
+
+  // XAI Yontem Etiketi
+  const xaiMethodLabel = document.getElementById('xaiMethodLabel');
+  if (xaiMethodLabel) xaiMethodLabel.textContent = `${data.xai_method} · Karsi-Olgusal Analiz`;
+
+  // Overlay label
+  const overlayLabel = document.getElementById('overlayLabel');
+  if (overlayLabel) overlayLabel.textContent = `🎯 ${data.xai_method} Overlay`;
+
+  // Analysis meta (XAI + Modalite)
+  const analysisMeta = document.getElementById('analysisMeta');
+  if (analysisMeta) {
+    const modalityLabels = { kolposkopi: '🔍 Kolposkopi', ultrason: '🟦 Ultrason', laparoskopi: '🔬 Laparoskopi' };
+    analysisMeta.innerHTML =
+      `<span class="meta-tag">${data.xai_method}</span>` +
+      `<span class="meta-tag">${modalityLabels[data.modality] || data.modality}</span>`;
+  }
 
   // Animasyonlu gauge (malign skoru)
   const malignPct = data.probabilities.malign;
   setTimeout(() => setGauge(malignPct), 100);
 
-  // Sınıf badge
+  // Sinif badge
   const ismalign = data.class_idx === 1;
-  gaugeClass.textContent = ismalign ? '🔴 MALİGN' : '🟢 BENİGN';
+  gaugeClass.textContent = ismalign ? '🔴 MALiGN' : '🟢 BENiGN';
   gaugeClass.classList.toggle('malign-class', ismalign);
   gaugeClass.classList.toggle('benign-class', !ismalign);
 
@@ -288,18 +344,18 @@ function displayResults(data) {
     malignVal.textContent = `${data.probabilities.malign}%`;
   }, 200);
 
-  // Açıklama
+  // Aciklama
   explanationText.textContent = data.explanation;
 
-  // Görüntüler
+  // Gorseller
   originalImg.src = `data:image/png;base64,${data.original_b64}`;
   heatmapImg.src  = `data:image/png;base64,${data.heatmap_b64}`;
   overlayImg.src  = `data:image/png;base64,${data.overlay_b64}`;
 
-  // Sonuçları göster
+  // Sonuclari goster
   showResults();
 
-  // Sayfayı aşağı kaydır
+  // Sayfayi asagi kaydır
   setTimeout(() => {
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 200);

@@ -1,6 +1,7 @@
 """
 XAI-GYN | src/preprocess.py
 Görüntü ön işleme ve veri augmentation pipeline'ı
+Desteklenen modaliteler: kolposkopi | ultrason | laparoskopi
 """
 
 import cv2
@@ -40,35 +41,82 @@ def apply_clahe(image_bgr: np.ndarray, clip_limit: float = 2.0) -> np.ndarray:
 # ─────────────────────────────────────
 def apply_denoising(image_bgr: np.ndarray) -> np.ndarray:
     """
-    Gaussian blur ile hafif gürültü giderir.
+    Gaussian blur ile hafif gürültü giderir (kolposkopi).
     """
     return cv2.GaussianBlur(image_bgr, (3, 3), 0)
+
+
+def apply_ultrasound_denoising(image_bgr: np.ndarray) -> np.ndarray:
+    """
+    Ultrason için bilateral filter ile speckle gürültüsü azaltma.
+    Kenar bilgisini korurken speckle'ı baskırır.
+    """
+    return cv2.bilateralFilter(image_bgr, d=9, sigmaColor=75, sigmaSpace=75)
+
+
+def apply_laparoscopy_preprocessing(image_bgr: np.ndarray) -> np.ndarray:
+    """
+    Laparoskopi için parlaklık normalizasyonu + hafif aydınlatma düzeltmesi.
+    """
+    lab = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l_norm = cv2.normalize(l, None, 0, 255, cv2.NORM_MINMAX)
+    enhanced = cv2.merge((l_norm, a, b))
+    return cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
 
 
 # ─────────────────────────────────────
 # Ham Görüntüyü İşle
 # ─────────────────────────────────────
-def preprocess_image(image_path: str) -> np.ndarray:
+def preprocess_image(image_path: str, modality: str = "kolposkopi") -> np.ndarray:
     """
-    Tek bir görüntüyü okur, CLAHE + gürültü giderme uygular, yeniden boyutlandırır.
+    Tek bir görüntüyü okur, modaliteye özgü ön işleme uygular.
+
+    Args:
+        image_path: Görüntü dosyası yolu
+        modality  : 'kolposkopi' | 'ultrason' | 'laparoskopi'
+
     Döndürür: RGB numpy array [H, W, 3]
     """
     img = cv2.imread(image_path)
     if img is None:
         raise FileNotFoundError(f"Görüntü bulunamadı: {image_path}")
 
-    # Kontrast artır
-    img = apply_clahe(img)
+    if modality == "ultrason":
+        img = apply_ultrasound_denoising(img)
+        img = apply_clahe(img, clip_limit=1.5)  # Daha hafif CLAHE
+    elif modality == "laparoskopi":
+        img = apply_laparoscopy_preprocessing(img)
+        img = apply_clahe(img)
+    else:  # kolposkopi (varsayılan)
+        img = apply_clahe(img)
+        img = apply_denoising(img)
 
-    # Gürültü gider
-    img = apply_denoising(img)
-
-    # Yeniden boyutlandır
     img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
-
-    # BGR → RGB
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
+
+
+def get_preprocess_fn(modality: str = "kolposkopi"):
+    """
+    Modaliteye göre uygun ön işleme fonksiyonunu döndürür.
+    Kullanım: fn = get_preprocess_fn('ultrason'); img = fn(image_bgr)
+    """
+    if modality == "ultrason":
+        def _fn(img):
+            img = apply_ultrasound_denoising(img)
+            return apply_clahe(img, clip_limit=1.5)
+        return _fn
+    elif modality == "laparoskopi":
+        def _fn(img):
+            img = apply_laparoscopy_preprocessing(img)
+            return apply_clahe(img)
+        return _fn
+    else:
+        def _fn(img):
+            img = apply_clahe(img)
+            return apply_denoising(img)
+        return _fn
 
 
 # ─────────────────────────────────────
@@ -126,8 +174,8 @@ def pil_to_tensor(pil_image: Image.Image):
 
 
 if __name__ == "__main__":
-    # Hızlı test
     print("Preprocess modülü yüklendi ✓")
-    print(f"  Hedef boyut : {IMAGE_SIZE}x{IMAGE_SIZE}")
+    print(f"  Hedef boyut    : {IMAGE_SIZE}x{IMAGE_SIZE}")
     print(f"  Normalizasyon - Mean: {MEAN}")
     print(f"  Normalizasyon - Std : {STD}")
+    print("  Desteklenen modaliteler: kolposkopi | ultrason | laparoskopi")
