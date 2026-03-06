@@ -41,11 +41,16 @@ VALID_MODALITIES     = ("kolposkopi", "ultrason", "laparoskopi")
 # ─────────────────────────────────────
 # Model Yukleme (Singleton)
 # ─────────────────────────────────────
+_unet_model = None
+
 def get_model():
-    global _model, _device, _model_loaded
+    global _model, _unet_model, _device, _model_loaded
     if _model_loaded:
-        return _model, _device
+        return _model, _unet_model, _device
+        
     from src.model import get_model as build_model, load_checkpoint
+    from src.models.unet import get_unet_model
+    
     _device = "cuda" if torch.cuda.is_available() else "cpu"
     if CHECKPOINT_PATH.exists():
         print(f"[App] Checkpoint yukleniyor: {CHECKPOINT_PATH}")
@@ -54,8 +59,13 @@ def get_model():
         print("[App] Checkpoint bulunamadi — demo modu")
         _model = build_model(device=_device, pretrained=False)
         _model.eval()
+        
+    # U-Net Yükleme (Eğer ağırlık varsa)
+    UNET_CKPT = ROOT / "models" / "checkpoints" / "unet_best.pth"
+    _unet_model = get_unet_model(device=_device, pretrained_path=str(UNET_CKPT) if UNET_CKPT.exists() else None)
+        
     _model_loaded = True
-    return _model, _device
+    return _model, _unet_model, _device
 
 
 # ─────────────────────────────────────
@@ -136,7 +146,7 @@ def predict():
 
     try:
         pil_img       = Image.open(io.BytesIO(file.read())).convert("RGB")
-        model, device = get_model()
+        model, unet_model, device = get_model()
 
         # Modality'e ozgu on islem notu
         modality_notes = {
@@ -163,6 +173,39 @@ def predict():
         # Base64 donusumleri
         original_b64 = pil_to_b64(pil_img.resize((400, 400)))
         heatmap_b64  = ndarray_to_b64(colorize_heatmap(gradcam_result["heatmap"]))
+
+        # ── U-Net Segmentasyon Üretimi (Hastalık Sınır Çizimi) ──
+        try:
+            from src.preprocess import pil_to_tensor
+            from src.models.unet import predict_mask
+            
+            # Resmi modelin anlayacagi tensöre çevir (224x224)
+            img_tensor = pil_to_tensor(pil_img).to(device)
+            # U-Net ten maskeyi al (Siyah beyaz görüntü [0-255])
+            binary_mask = predict_mask(unet_model, img_tensor)
+            
+            # Maskenin kenarlarını (hatlarını) bul (Kontur Olarak)
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # Orijinal resmi 224x224 veya 400x400'e yeniden boyutlandırıp üstüne yeşil kontur (sınır) çizelim
+            original_resized = np.array(pil_img.resize((400, 400)))
+            
+            if len(contours) > 0:
+                 # Maske 224 lük, 400 e göre oranlamamak için önce maskeyi 400x400 yapıp konturu öyle de çekebiliriz
+                 mask_400 = cv2.resize(binary_mask, (400, 400), interpolation=cv2.INTER_NEAREST)
+                 contours_400, _ = cv2.findContours(mask_400, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                 # Kalınlık 2 px, renk yeşil (RGB'de 0, 255, 0)
+                 segmented_img_np = cv2.drawContours(original_resized.copy(), contours_400, -1, (0, 255, 0), 2)
+            else:
+                 # Lezyon bulunamadıysa uyarı olarak düz orijinali ver (Veya "Demo/Rastgele Sınır" çizebiliriz şimdilik)
+                 segmented_img_np = original_resized
+
+            segmentation_b64 = ndarray_to_b64(segmented_img_np)
+        except Exception as e:
+            print(f"[App] U-Net Hatasi: {e}")
+            # Hata varsa, orijinalini ver geç
+            segmentation_b64 = original_b64
+
 
         # XAI yontemine gore overlay
         xai_label   = "Grad-CAM"
@@ -214,6 +257,7 @@ def predict():
             "lezyon_detected": lezyon_detected,
             "explanation"    : explanation,
             "original_b64"   : original_b64,
+            "segmentation_b64": segmentation_b64,
             "overlay_b64"    : overlay_b64,
             "heatmap_b64"    : heatmap_b64,
             "processing_ms"  : int((time.time() - t0) * 1000),

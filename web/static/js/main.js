@@ -50,6 +50,7 @@ const processingTime = document.getElementById('processingTime');
 const modelBadge     = document.getElementById('modelBadge');
 const originalImg    = document.getElementById('originalImg');
 const heatmapImg     = document.getElementById('heatmapImg');
+const segmentationImg= document.getElementById('segmentationImg');
 const overlayImg     = document.getElementById('overlayImg');
 
 // State
@@ -350,6 +351,9 @@ function displayResults(data) {
   // Gorseller
   originalImg.src = `data:image/png;base64,${data.original_b64}`;
   heatmapImg.src  = `data:image/png;base64,${data.heatmap_b64}`;
+  if (segmentationImg && data.segmentation_b64) {
+      segmentationImg.src = `data:image/png;base64,${data.segmentation_b64}`;
+  }
   overlayImg.src  = `data:image/png;base64,${data.overlay_b64}`;
 
   // Sonuclari goster
