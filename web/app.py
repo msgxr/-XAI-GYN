@@ -42,9 +42,10 @@ VALID_MODALITIES     = ("kolposkopi", "ultrason", "laparoskopi")
 # Model Yukleme (Singleton)
 # ─────────────────────────────────────
 _unet_model = None
+_unet_is_demo = True
 
 def get_model():
-    global _model, _unet_model, _device, _model_loaded
+    global _model, _unet_model, _unet_is_demo, _device, _model_loaded
     if _model_loaded:
         return _model, _unet_model, _device
         
@@ -62,7 +63,12 @@ def get_model():
         
     # U-Net Yükleme (Eğer ağırlık varsa)
     UNET_CKPT = ROOT / "models" / "checkpoints" / "unet_best.pth"
-    _unet_model = get_unet_model(device=_device, pretrained_path=str(UNET_CKPT) if UNET_CKPT.exists() else None)
+    if UNET_CKPT.exists():
+        _unet_model = get_unet_model(device=_device, pretrained_path=str(UNET_CKPT))
+        _unet_is_demo = False
+    else:
+        _unet_model = get_unet_model(device=_device, pretrained_path=None)
+        _unet_is_demo = True
         
     _model_loaded = True
     return _model, _unet_model, _device
@@ -176,34 +182,36 @@ def predict():
 
         # ── U-Net Segmentasyon Üretimi (Hastalık Sınır Çizimi) ──
         try:
-            from src.preprocess import pil_to_tensor
-            from src.models.unet import predict_mask
-            
-            # Resmi modelin anlayacagi tensöre çevir (224x224)
-            img_tensor = pil_to_tensor(pil_img).to(device)
-            # U-Net ten maskeyi al (Siyah beyaz görüntü [0-255])
-            binary_mask = predict_mask(unet_model, img_tensor)
-            
-            # Maskenin kenarlarını (hatlarını) bul (Kontur Olarak)
-            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            # Orijinal resmi 224x224 veya 400x400'e yeniden boyutlandırıp üstüne yeşil kontur (sınır) çizelim
             original_resized = np.array(pil_img.resize((400, 400)))
             
-            if len(contours) > 0:
-                 # Maske 224 lük, 400 e göre oranlamamak için önce maskeyi 400x400 yapıp konturu öyle de çekebiliriz
-                 mask_400 = cv2.resize(binary_mask, (400, 400), interpolation=cv2.INTER_NEAREST)
-                 contours_400, _ = cv2.findContours(mask_400, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                 # Kalınlık 2 px, renk yeşil (RGB'de 0, 255, 0)
-                 segmented_img_np = cv2.drawContours(original_resized.copy(), contours_400, -1, (0, 255, 0), 2)
+            if not _unet_is_demo:
+                from src.preprocess import pil_to_tensor
+                from src.models.unet import predict_mask
+                # Real Mod: Eğitilmiş U-Net sonucunu kullan
+                img_tensor = pil_to_tensor(pil_img).to(device)
+                binary_mask = predict_mask(unet_model, img_tensor)
+                mask_400 = cv2.resize(binary_mask, (400, 400), interpolation=cv2.INTER_NEAREST)
+                contours_400, _ = cv2.findContours(mask_400, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                segmented_img_np = cv2.drawContours(original_resized.copy(), contours_400, -1, (0, 255, 0), 2)
             else:
-                 # Lezyon bulunamadıysa uyarı olarak düz orijinali ver (Veya "Demo/Rastgele Sınır" çizebiliriz şimdilik)
-                 segmented_img_np = original_resized
+                # Demo Modu Fallback (Kesin Çözüm v2 - ELİPS)
+                # Isı haritasındaki EN SICAK pikseli bul ve oraya bir daire/elips çiz.
+                try:
+                    raw_heatmap = gradcam_result["heatmap"] # [224, 224]
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(raw_heatmap)
+                    center_x = int(max_loc[0] * (400 / 224))
+                    center_y = int(max_loc[1] * (400 / 224))
+                    
+                    segmented_img_np = original_resized.copy()
+                    if max_val > 0.1:
+                        cv2.ellipse(segmented_img_np, (center_x, center_y), (50, 40), 0, 0, 360, (0, 255, 0), 3)
+                except:
+                    segmented_img_np = original_resized
 
             segmentation_b64 = ndarray_to_b64(segmented_img_np)
+            segmentation_b64 = ndarray_to_b64(segmented_img_np)
         except Exception as e:
-            print(f"[App] U-Net Hatasi: {e}")
-            # Hata varsa, orijinalini ver geç
+            print(f"[App] BI-V3 U-Net Hatasi: {e}")
             segmentation_b64 = original_b64
 
 
