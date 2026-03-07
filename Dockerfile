@@ -22,5 +22,5 @@ COPY . .
 # Expose port
 EXPOSE 5000
 
-# Run the application
-CMD ["python", "web/app.py"]
+# Run the application with Gunicorn
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "--timeout", "120", "--chdir", "web", "app:app"]

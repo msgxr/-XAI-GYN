@@ -34,12 +34,19 @@ pip install -q -r requirements.txt
 
 echo.
 echo ==========================================
-echo   Sunucu Baslatiliyor: http://localhost:5000
+echo   Model Agirliklari İndiriliyor/Kontrol Ediliyor
+echo ==========================================
+python download_weights.py
+
+echo.
+echo ==========================================
+echo   Sunucu Baslatiliyor: http://localhost:5050
 echo ==========================================
 echo.
 
 :: Flask uygulamasını başlat
 cd web
 python app.py
+
 
 pause

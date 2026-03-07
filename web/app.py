@@ -41,37 +41,46 @@ VALID_MODALITIES     = ("kolposkopi", "ultrason", "laparoskopi")
 # ─────────────────────────────────────
 # Model Yukleme (Singleton)
 # ─────────────────────────────────────
+_models = {} # dict of models by type
 _unet_model = None
 _unet_is_demo = True
+_device = "cpu"
 
-def get_model():
-    global _model, _unet_model, _unet_is_demo, _device, _model_loaded
-    if _model_loaded:
-        return _model, _unet_model, _device
-        
-    from src.model import get_model as build_model, load_checkpoint
-    from src.models.unet import get_unet_model
+def get_model(model_type="efficientnet"):
+    global _models, _unet_model, _unet_is_demo, _device
     
     _device = "cuda" if torch.cuda.is_available() else "cpu"
-    if CHECKPOINT_PATH.exists():
-        print(f"[App] Checkpoint yukleniyor: {CHECKPOINT_PATH}")
-        _model = load_checkpoint(str(CHECKPOINT_PATH), device=_device)
-    else:
-        print("[App] Checkpoint bulunamadi — demo modu")
-        _model = build_model(device=_device, pretrained=False)
-        _model.eval()
+    
+    # Base/Classification Model
+    if model_type not in _models:
+        from src.model import get_model as build_model, load_checkpoint
         
-    # U-Net Yükleme (Eğer ağırlık varsa)
-    UNET_CKPT = ROOT / "models" / "checkpoints" / "unet_best.pth"
-    if UNET_CKPT.exists():
-        _unet_model = get_unet_model(device=_device, pretrained_path=str(UNET_CKPT))
-        _unet_is_demo = False
-    else:
-        _unet_model = get_unet_model(device=_device, pretrained_path=None)
-        _unet_is_demo = True
-        
-    _model_loaded = True
-    return _model, _unet_model, _device
+        # Check if requested model type has a checkpoint
+        custom_ckpt = ROOT / "models" / "checkpoints" / f"{model_type}_best.pth"
+        if custom_ckpt.exists():
+            print(f"[App] Checkpoint yukleniyor: {custom_ckpt}")
+            _models[model_type] = load_checkpoint(str(custom_ckpt), device=_device, fallback_type=model_type)
+        elif CHECKPOINT_PATH.exists() and model_type == "efficientnet":
+            # legacy check for default efficientnet
+            print(f"[App] Varsayılan Checkpoint yukleniyor: {CHECKPOINT_PATH}")
+            _models[model_type] = load_checkpoint(str(CHECKPOINT_PATH), device=_device, fallback_type=model_type)
+        else:
+            print(f"[App] Checkpoint bulunamadi — demo modu ({model_type})")
+            _models[model_type] = build_model(device=_device, pretrained=False, model_type=model_type)
+            _models[model_type].eval()
+            
+    # U-Net Yükleme (Singleton for UNET)
+    if _unet_model is None:
+        from src.models.unet import get_unet_model
+        UNET_CKPT = ROOT / "models" / "checkpoints" / "unet_best.pth"
+        if UNET_CKPT.exists():
+            _unet_model = get_unet_model(device=_device, pretrained_path=str(UNET_CKPT))
+            _unet_is_demo = False
+        else:
+            _unet_model = get_unet_model(device=_device, pretrained_path=None)
+            _unet_is_demo = True
+            
+    return _models[model_type], _unet_model, _device
 
 
 # ─────────────────────────────────────
@@ -145,14 +154,18 @@ def predict():
 
     xai_method = request.form.get("xai_method", "gradcam").lower()
     modality   = request.form.get("modality",   "kolposkopi").lower()
+    model_type = request.form.get("model_type", "efficientnet").lower()
+    
     if xai_method not in VALID_XAI_METHODS:
         xai_method = "gradcam"
     if modality not in VALID_MODALITIES:
         modality = "kolposkopi"
+    if model_type not in ["efficientnet", "resnet50"]:
+        model_type = "efficientnet"
 
     try:
         pil_img       = Image.open(io.BytesIO(file.read())).convert("RGB")
-        model, unet_model, device = get_model()
+        model, unet_model, device = get_model(model_type=model_type)
 
         # Modality'e ozgu on islem notu
         modality_notes = {
@@ -296,6 +309,29 @@ def predict():
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Analiz sirasinda hata: {str(e)}"}), 500
+
+
+@app.route("/generate_pdf", methods=["POST"])
+def generate_pdf():
+    """
+    Klinik analiz sonucunu PDF formatinda dondurur.
+    Beklenen (JSON):
+    - original_b64, heatmap_b64, overlay_b64
+    - class_name, confidence, malign_prob, lezyon_detected
+    - explanation, xai_method, modality
+    """
+    try:
+        data = request.json
+        from web.pdf_generator import generate_clinical_report
+        pdf_bytes = generate_clinical_report(data)
+        
+        return jsonify({
+            "pdf_b64": base64.b64encode(pdf_bytes).decode("utf-8")
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"PDF olusturma hatasi: {str(e)}"}), 500
 
 
 # ─────────────────────────────────────

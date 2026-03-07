@@ -58,8 +58,9 @@ let selectedFile = null;
 let lastResult = null;
 let selectedModality = 'kolposkopi';  // varsayilan
 let selectedXai = 'gradcam';     // varsayilan
+let selectedModel = 'efficientnet'; // varsayilan
 
-// ─── Opt-Button Gruplari (Modalite + XAI) ──────
+// ─── Opt-Button Gruplari (Modalite + XAI + Model) ──────
 function bindOptionGroup(groupId, onChange) {
   const group = document.getElementById(groupId);
   if (!group) return;
@@ -75,6 +76,7 @@ function bindOptionGroup(groupId, onChange) {
 
 bindOptionGroup('modalityGroup', (val) => { selectedModality = val; });
 bindOptionGroup('xaiGroup', (val) => { selectedXai = val; });
+bindOptionGroup('modelTypeGroup', (val) => { selectedModel = val; });
 
 // ─── Gauge Arc Math ───────────────────────────
 // The gauge arc path is a half-circle (180°), total arc length ≈ 251px
@@ -236,6 +238,7 @@ async function runAnalysis() {
   formData.append('image', selectedFile);
   formData.append('xai_method', selectedXai);
   formData.append('modality', selectedModality);
+  formData.append('model_type', selectedModel);
 
 
   try {
@@ -367,65 +370,44 @@ function displayResults(data) {
 // ─── Download ─────────────────────────────────
 downloadBtn.addEventListener('click', downloadResults);
 
-function downloadResults() {
+async function downloadResults() {
   if (!lastResult) return;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 1200;
-  canvas.height = 700;
-  const ctx = canvas.getContext('2d');
+  // Butonu loading durumuna alalim
+  const originalText = downloadBtn.innerHTML;
+  downloadBtn.innerHTML = '⏳ Hazırlanıyor...';
+  downloadBtn.disabled = true;
 
-  // Background
-  ctx.fillStyle = '#0b1220';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Title
-  ctx.fillStyle = '#4facfe';
-  ctx.font = 'bold 28px Inter, sans-serif';
-  ctx.fillText('XAI-GYN — Analiz Sonucu', 40, 55);
-
-  // Result text
-  ctx.fillStyle = '#8ba4c0';
-  ctx.font = '16px Inter, sans-serif';
-  ctx.fillText(`Tahmin: ${lastResult.class_name}  |  Güven: ${lastResult.confidence}%  |  Malign Risk: ${lastResult.probabilities.malign}%`, 40, 90);
-
-  const drawB64 = (b64, x, y, w, h) => {
-    return new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => { ctx.drawImage(img, x, y, w, h); resolve(); };
-      img.src = `data:image/png;base64,${b64}`;
+  try {
+    const response = await fetch('/generate_pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(lastResult)
     });
-  };
 
-  Promise.all([
-    drawB64(lastResult.original_b64, 40, 120, 360, 360),
-    drawB64(lastResult.heatmap_b64, 430, 120, 360, 360),
-    drawB64(lastResult.overlay_b64, 820, 120, 360, 360),
-  ]).then(() => {
-    // Labels
-    ctx.fillStyle = '#5a7090';
-    ctx.font = '13px Inter';
-    ctx.fillText('Orijinal', 40, 510);
-    ctx.fillText('Isı Haritası', 430, 510);
-    ctx.fillText('Overlay (Grad-CAM)', 820, 510);
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'PDF olusturulamadi.');
+    }
 
-    // Explanation snippet
-    ctx.fillStyle = '#8ba4c0';
-    ctx.font = '13px Inter';
-    const lines = lastResult.explanation.split('\n').slice(0, 6);
-    lines.forEach((line, i) => ctx.fillText(line.slice(0, 120), 40, 550 + i * 22));
+    // Base64 PDF'i indir
+    const linkSource = `data:application/pdf;base64,${data.pdf_b64}`;
+    const downloadLink = document.createElement("a");
+    const fileName = `xai_gyn_rapor_${Date.now()}.pdf`;
 
-    // Timestamp
-    ctx.fillStyle = '#3a5070';
-    ctx.font = '11px Inter';
-    ctx.fillText(`XAI-GYN v1.0 · ${new Date().toLocaleString('tr-TR')}`, 40, 685);
+    downloadLink.href = linkSource;
+    downloadLink.download = fileName;
+    downloadLink.click();
 
-    // Download
-    const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
-    a.download = `xai_gyn_sonuc_${Date.now()}.png`;
-    a.click();
-  });
+  } catch (err) {
+    console.error('PDF indirme hatasi:', err);
+    showError('Sistem Uyarısı: Klinik PDF raporu oluşturulamadı. Lütfen tekrar deneyiniz.');
+  } finally {
+    downloadBtn.innerHTML = originalText;
+    downloadBtn.disabled = false;
+  }
 }
 
 // ─── UI State Helpers ─────────────────────────

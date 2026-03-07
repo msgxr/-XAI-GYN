@@ -117,6 +117,15 @@
       </div>
     </div>
 
+    <!-- Model Mimarisi Seçimi -->
+    <div class="option-group" id="modelTypeGroup">
+      <label class="option-label">🧬 Model Mimarisi (Çoklu Karşılaştırma)</label>
+      <div class="option-buttons" role="group" aria-label="Model Mimarisi">
+        <button class="opt-btn active" id="model-eff" data-value="efficientnet" type="button">⚡ EfficientNet-B0 (Varsayılan)</button>
+        <button class="opt-btn" id="model-res" data-value="resnet50" type="button">🛡️ ResNet50</button>
+      </div>
+    </div>
+
     <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Görüntü yükle">
       <input type="file" id="fileInput" accept="image/*" style="display:none" />
       <div class="upload-animation" id="uploadAnimation">
