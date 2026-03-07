@@ -48,6 +48,30 @@ xai-gyn/
 
 ---
 
+## 🏗️ Mimari ve Veri Akışı
+
+```mermaid
+graph TD
+    A[Kullanıcı Arayüzü<br/>Web Tarayıcı] -->|Görüntü Yükleme<br/>REST API| B(Flask Sunucusu)
+    B --> C{Model Seçimi}
+    C -->|Çalışan Model| D[EfficientNet-B0<br/>PyTorch]
+    C -->|Checkpoint Yoksa| E[Demo Modu<br/>Rastgele Ağırlıklar]
+    D --> F{Tahmin}
+    F -->|Benign / Malign| G[Sınıflandırma Sonucu]
+    F -->|Gradients| H[Grad-CAM<br/>Isı Haritası Üretimi]
+    G --> I[Karşı-Olgusal<br/>Açıklama]
+    H --> I
+    I -->|JSON & Base64 Resim| B
+    B -->|UI Güncelleme| A
+
+    style A fill:#4facfe,stroke:#fff,stroke-width:2px,color:#fff
+    style B fill:#2b303b,stroke:#00d4aa,stroke-width:2px,color:#fff
+    style D fill:#f05033,stroke:#fff,stroke-width:2px,color:#fff
+    style H fill:#ff7b00,stroke:#fff,stroke-width:2px,color:#fff
+```
+
+---
+
 ## 🧠 Model
 
 | Bileşen | Seçim |

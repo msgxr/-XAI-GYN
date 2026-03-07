@@ -132,8 +132,9 @@ def train(config: dict = None):
     )
 
     # LR Scheduler
+    # ReduceLROnPlateau does not accept verbose in some torch versions
     scheduler = ReduceLROnPlateau(
-        optimizer, mode="max", factor=0.5, patience=3, verbose=True
+        optimizer, mode="max", factor=0.5, patience=3
     )
 
     # Early Stopping değişkenleri
@@ -149,7 +150,11 @@ def train(config: dict = None):
         t_start = time.time()
 
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss,   val_acc   = validate(model, val_loader, criterion, device)
+        # Eğer val_loader boşsa (ör. tüm veri eğitim için kullanıldı) valide atla
+        if len(val_loader.dataset) > 0:
+            val_loss,   val_acc   = validate(model, val_loader, criterion, device)
+        else:
+            val_loss, val_acc = 0.0, 0.0
 
         scheduler.step(val_acc)
 

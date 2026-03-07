@@ -306,5 +306,9 @@ if __name__ == "__main__":
     print("  XAI-GYN Web Arayuzu Baslatiliyor")
     print("  URL: http://localhost:5050")
     print("="*60 + "\n")
-    get_model()
-    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get('PORT', 5050)),
+        debug=False,
+        threaded=True,
+    )

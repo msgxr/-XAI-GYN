@@ -19,45 +19,45 @@ const SVG_DEFS = `
 document.body.insertAdjacentHTML('afterbegin', SVG_DEFS);
 
 // ─── DOM References ───────────────────────────
-const uploadZone       = document.getElementById('uploadZone');
-const fileInput        = document.getElementById('fileInput');
-const browseBtn        = document.getElementById('browseBtn');
-const uploadAnimation  = document.getElementById('uploadAnimation');
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const browseBtn = document.getElementById('browseBtn');
+const uploadAnimation = document.getElementById('uploadAnimation');
 const previewContainer = document.getElementById('previewContainer');
-const previewImg       = document.getElementById('previewImg');
-const previewInfo      = document.getElementById('previewInfo');
-const resetBtn         = document.getElementById('resetBtn');
-const analyzeBtn       = document.getElementById('analyzeBtn');
+const previewImg = document.getElementById('previewImg');
+const previewInfo = document.getElementById('previewInfo');
+const resetBtn = document.getElementById('resetBtn');
+const analyzeBtn = document.getElementById('analyzeBtn');
 const loadingContainer = document.getElementById('loadingContainer');
-const loadingStep      = document.getElementById('loadingStep');
-const resultsSection   = document.getElementById('resultsSection');
-const errorContainer   = document.getElementById('errorContainer');
-const errorMsg         = document.getElementById('errorMsg');
-const errorRetryBtn    = document.getElementById('errorRetryBtn');
-const newAnalysisBtn   = document.getElementById('newAnalysisBtn');
-const downloadBtn      = document.getElementById('downloadBtn');
+const loadingStep = document.getElementById('loadingStep');
+const resultsSection = document.getElementById('resultsSection');
+const errorContainer = document.getElementById('errorContainer');
+const errorMsg = document.getElementById('errorMsg');
+const errorRetryBtn = document.getElementById('errorRetryBtn');
+const newAnalysisBtn = document.getElementById('newAnalysisBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 
 // Result elements
-const gaugeFill      = document.getElementById('gaugeFill');
-const gaugeValue     = document.getElementById('gaugeValue');
-const gaugeClass     = document.getElementById('gaugeClass');
-const benignBar      = document.getElementById('benignBar');
-const malignBar      = document.getElementById('malignBar');
-const benignVal      = document.getElementById('benignVal');
-const malignVal      = document.getElementById('malignVal');
+const gaugeFill = document.getElementById('gaugeFill');
+const gaugeValue = document.getElementById('gaugeValue');
+const gaugeClass = document.getElementById('gaugeClass');
+const benignBar = document.getElementById('benignBar');
+const malignBar = document.getElementById('malignBar');
+const benignVal = document.getElementById('benignVal');
+const malignVal = document.getElementById('malignVal');
 const explanationText = document.getElementById('explanationText');
 const processingTime = document.getElementById('processingTime');
-const modelBadge     = document.getElementById('modelBadge');
-const originalImg    = document.getElementById('originalImg');
-const heatmapImg     = document.getElementById('heatmapImg');
-const segmentationImg= document.getElementById('segmentationImg');
-const overlayImg     = document.getElementById('overlayImg');
+const modelBadge = document.getElementById('modelBadge');
+const originalImg = document.getElementById('originalImg');
+const heatmapImg = document.getElementById('heatmapImg');
+const segmentationImg = document.getElementById('segmentationImg');
+const overlayImg = document.getElementById('overlayImg');
 
 // State
-let selectedFile     = null;
-let lastResult       = null;
+let selectedFile = null;
+let lastResult = null;
 let selectedModality = 'kolposkopi';  // varsayilan
-let selectedXai      = 'gradcam';     // varsayilan
+let selectedXai = 'gradcam';     // varsayilan
 
 // ─── Opt-Button Gruplari (Modalite + XAI) ──────
 function bindOptionGroup(groupId, onChange) {
@@ -74,8 +74,7 @@ function bindOptionGroup(groupId, onChange) {
 }
 
 bindOptionGroup('modalityGroup', (val) => { selectedModality = val; });
-bindOptionGroup('xaiGroup',      (val) => { selectedXai      = val; });
-
+bindOptionGroup('xaiGroup', (val) => { selectedXai = val; });
 
 // ─── Gauge Arc Math ───────────────────────────
 // The gauge arc path is a half-circle (180°), total arc length ≈ 251px
@@ -139,12 +138,12 @@ function handleFile(file) {
   const MAX_SIZE = 32 * 1024 * 1024;
 
   if (!ALLOWED_TYPES.includes(file.type) && !file.name.match(/\.(tiff|tif)$/i)) {
-    showError('Desteklenmeyen dosya türü. Lütfen JPG, PNG, BMP veya TIFF yükleyin.');
+    showError('Klinik Uyarı: Desteklenmeyen görüntü formatı tespit edildi. Analiz doğruluğu için lütfen standart kolposkopi formatlarını (JPG, PNG, BMP, TIFF) kullanınız.');
     return;
   }
 
   if (file.size > MAX_SIZE) {
-    showError('Dosya boyutu 32 MB limitini aşıyor.');
+    showError('Sistem Uyarısı: Görüntü dosyası maksimum işleme sınırını (32 MB) aşmaktadır. Lütfen görüntüyü optimize ederek tekrar deneyiniz.');
     return;
   }
 
@@ -234,9 +233,9 @@ async function runAnalysis() {
 
   // FormData
   const formData = new FormData();
-  formData.append('image',      selectedFile);
+  formData.append('image', selectedFile);
   formData.append('xai_method', selectedXai);
-  formData.append('modality',   selectedModality);
+  formData.append('modality', selectedModality);
 
 
   try {
@@ -276,7 +275,7 @@ async function runAnalysis() {
   } catch (err) {
     console.error('Analysis error:', err);
     hideLoading();
-    showError(err.message || 'Sunucuya bağlanılamadı. Flask uygulamasının çalıştığından emin olun.');
+    showError(err.message || 'Sistem Uyarısı: Analiz sunucusuna bağlantı kurulamadı. Lütfen ağ bağlantınızı ve teşhis sunucusunun (Flask) durumunu kontrol ediniz.');
   }
 }
 
@@ -295,8 +294,8 @@ function displayResults(data) {
 
   // Lezyon Tespiti Banner
   const lezyonBanner = document.getElementById('lezyonBanner');
-  const lezyonIcon   = document.getElementById('lezyonIcon');
-  const lezyonText   = document.getElementById('lezyonText');
+  const lezyonIcon = document.getElementById('lezyonIcon');
+  const lezyonText = document.getElementById('lezyonText');
   if (lezyonBanner && lezyonIcon && lezyonText) {
     lezyonBanner.style.display = 'flex';
     if (data.lezyon_detected) {
@@ -350,11 +349,11 @@ function displayResults(data) {
 
   // Gorseller
   originalImg.src = `data:image/png;base64,${data.original_b64}`;
-  heatmapImg.src  = `data:image/png;base64,${data.heatmap_b64}`;
+  heatmapImg.src = `data:image/png;base64,${data.heatmap_b64}`;
   if (segmentationImg && data.segmentation_b64) {
-      segmentationImg.src = `data:image/png;base64,${data.segmentation_b64}`;
+    segmentationImg.src = `data:image/png;base64,${data.segmentation_b64}`;
   }
-  overlayImg.src  = `data:image/png;base64,${data.overlay_b64}`;
+  overlayImg.src = `data:image/png;base64,${data.overlay_b64}`;
 
   // Sonuclari goster
   showResults();
@@ -372,7 +371,7 @@ function downloadResults() {
   if (!lastResult) return;
 
   const canvas = document.createElement('canvas');
-  canvas.width  = 1200;
+  canvas.width = 1200;
   canvas.height = 700;
   const ctx = canvas.getContext('2d');
 
@@ -399,9 +398,9 @@ function downloadResults() {
   };
 
   Promise.all([
-    drawB64(lastResult.original_b64, 40,  120, 360, 360),
-    drawB64(lastResult.heatmap_b64,  430, 120, 360, 360),
-    drawB64(lastResult.overlay_b64,  820, 120, 360, 360),
+    drawB64(lastResult.original_b64, 40, 120, 360, 360),
+    drawB64(lastResult.heatmap_b64, 430, 120, 360, 360),
+    drawB64(lastResult.overlay_b64, 820, 120, 360, 360),
   ]).then(() => {
     // Labels
     ctx.fillStyle = '#5a7090';
@@ -423,7 +422,7 @@ function downloadResults() {
 
     // Download
     const a = document.createElement('a');
-    a.href     = canvas.toDataURL('image/png');
+    a.href = canvas.toDataURL('image/png');
     a.download = `xai_gyn_sonuc_${Date.now()}.png`;
     a.click();
   });
@@ -435,7 +434,7 @@ function showLoading() {
   loadingContainer.classList.add('fade-in');
   analyzeBtn.disabled = true;
   // Reset step indicators
-  ['step1','step2','step3','step4'].forEach(s => {
+  ['step1', 'step2', 'step3', 'step4'].forEach(s => {
     const el = document.getElementById(s);
     if (el) { el.classList.remove('active', 'done'); }
   });
